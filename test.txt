@@ -1,4 +1,4 @@
- import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestContext;
@@ -6,65 +6,51 @@ import org.springframework.test.context.TestExecutionListener;
 import org.springframework.test.context.support.AbstractTestExecutionListener;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 
 public class MockBeanTestExecutionListener extends AbstractTestExecutionListener {
 
     @Override
     public void beforeTestClass(TestContext testContext) throws Exception {
-        handleMockBeanAnnotation(testContext);
+        if (containsMockBean(testContext.getTestClass())) {
+            disableParallelExecution(testContext.getTestClass());
+        }
     }
 
     @Override
     public void beforeTestMethod(TestContext testContext) throws Exception {
-        handleMockBeanAnnotation(testContext);
-    }
-
-    private void handleMockBeanAnnotation(TestContext testContext) {
-        Class<?> testClass = testContext.getTestClass();
-        if (hasMockBean(testClass)) {
-            // Adjust the execution strategy to run in the same thread
-            Execution execution = testClass.getAnnotation(Execution.class);
-            if (execution == null || execution.value() != ExecutionMode.SAME_THREAD) {
-                // Add the Execution annotation dynamically
-                testClass.getDeclaredAnnotations().add(new Execution() {
-                    @Override
-                    public Class<? extends Annotation> annotationType() {
-                        return Execution.class;
-                    }
-
-                    @Override
-                    public ExecutionMode value() {
-                        return ExecutionMode.SAME_THREAD;
-                    }
-                });
-            }
+        if (containsMockBean(testContext.getTestMethod())) {
+            disableParallelExecution(testContext.getTestMethod());
         }
     }
 
-    private boolean hasMockBean(Class<?> testClass) {
-        if (testClass == null) {
-            return false;
-        }
-
-        // Check class level
+    private boolean containsMockBean(Class<?> testClass) {
         for (Field field : testClass.getDeclaredFields()) {
             if (field.isAnnotationPresent(MockBean.class)) {
                 return true;
             }
         }
+        return false;
+    }
 
-        // Check method level
-        for (Method method : testClass.getDeclaredMethods()) {
-            if (method.isAnnotationPresent(MockBean.class)) {
+    private boolean containsMockBean(Method testMethod) {
+        for (Field field : testMethod.getDeclaringClass().getDeclaredFields()) {
+            if (field.isAnnotationPresent(MockBean.class)) {
                 return true;
             }
         }
-
         return false;
     }
+
+    private void disableParallelExecution(Class<?> testClass) {
+        if (!testClass.isAnnotationPresent(Execution.class)) {
+            testClass.getDeclaredAnnotations().add(Execution.class.getAnnotation(ExecutionMode.SAME_THREAD));
+        }
+    }
+
+    private void disableParallelExecution(Method testMethod) {
+        if (!testMethod.isAnnotationPresent(Execution.class)) {
+            testMethod.getDeclaredAnnotations().add(Execution.class.getAnnotation(ExecutionMode.SAME_THREAD));
+        }
+    }
 }
-
-
-
-org.springframework.test.context.TestExecutionListener=\
-com.yourpackage.MockBeanTestExecutionListener
