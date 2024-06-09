@@ -1,1 +1,70 @@
- 
+ import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.TestContext;
+import org.springframework.test.context.TestExecutionListener;
+import org.springframework.test.context.support.AbstractTestExecutionListener;
+
+import java.lang.reflect.Field;
+
+public class MockBeanTestExecutionListener extends AbstractTestExecutionListener {
+
+    @Override
+    public void beforeTestClass(TestContext testContext) throws Exception {
+        handleMockBeanAnnotation(testContext);
+    }
+
+    @Override
+    public void beforeTestMethod(TestContext testContext) throws Exception {
+        handleMockBeanAnnotation(testContext);
+    }
+
+    private void handleMockBeanAnnotation(TestContext testContext) {
+        Class<?> testClass = testContext.getTestClass();
+        if (hasMockBean(testClass)) {
+            // Adjust the execution strategy to run in the same thread
+            Execution execution = testClass.getAnnotation(Execution.class);
+            if (execution == null || execution.value() != ExecutionMode.SAME_THREAD) {
+                // Add the Execution annotation dynamically
+                testClass.getDeclaredAnnotations().add(new Execution() {
+                    @Override
+                    public Class<? extends Annotation> annotationType() {
+                        return Execution.class;
+                    }
+
+                    @Override
+                    public ExecutionMode value() {
+                        return ExecutionMode.SAME_THREAD;
+                    }
+                });
+            }
+        }
+    }
+
+    private boolean hasMockBean(Class<?> testClass) {
+        if (testClass == null) {
+            return false;
+        }
+
+        // Check class level
+        for (Field field : testClass.getDeclaredFields()) {
+            if (field.isAnnotationPresent(MockBean.class)) {
+                return true;
+            }
+        }
+
+        // Check method level
+        for (Method method : testClass.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(MockBean.class)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+
+
+org.springframework.test.context.TestExecutionListener=\
+com.yourpackage.MockBeanTestExecutionListener
