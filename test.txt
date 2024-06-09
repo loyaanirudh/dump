@@ -1,26 +1,27 @@
-import org.junit.jupiter.api.parallel.Execution;
-import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestContext;
-import org.springframework.test.context.TestExecutionListener;
 import org.springframework.test.context.support.AbstractTestExecutionListener;
+import org.junit.platform.engine.support.hierarchical.ParallelExecutionConfigurationStrategy;
+import org.junit.platform.engine.support.hierarchical.ParallelExecutionConfiguration;
+import org.junit.platform.engine.ConfigurationParameters;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Optional;
 
 public class MockBeanTestExecutionListener extends AbstractTestExecutionListener {
 
     @Override
     public void beforeTestClass(TestContext testContext) throws Exception {
         if (containsMockBean(testContext.getTestClass())) {
-            disableParallelExecution(testContext.getTestClass());
+            setSequentialExecution(testContext);
         }
     }
 
     @Override
     public void beforeTestMethod(TestContext testContext) throws Exception {
         if (containsMockBean(testContext.getTestMethod())) {
-            disableParallelExecution(testContext.getTestMethod());
+            setSequentialExecution(testContext);
         }
     }
 
@@ -42,15 +43,8 @@ public class MockBeanTestExecutionListener extends AbstractTestExecutionListener
         return false;
     }
 
-    private void disableParallelExecution(Class<?> testClass) {
-        if (!testClass.isAnnotationPresent(Execution.class)) {
-            testClass.getDeclaredAnnotations().add(Execution.class.getAnnotation(ExecutionMode.SAME_THREAD));
-        }
-    }
-
-    private void disableParallelExecution(Method testMethod) {
-        if (!testMethod.isAnnotationPresent(Execution.class)) {
-            testMethod.getDeclaredAnnotations().add(Execution.class.getAnnotation(ExecutionMode.SAME_THREAD));
-        }
+    private void setSequentialExecution(TestContext testContext) {
+        // Custom logic to set the execution mode to same thread (sequential execution)
+        System.setProperty("junit.jupiter.execution.parallel.enabled", "false");
     }
 }
