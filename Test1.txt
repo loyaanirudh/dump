@@ -48,11 +48,12 @@ def get_all_projects(group, ignored_subgroups):
     excluding those in the ignored subgroups.
     """
     projects = []
-    subgroups = group.subgroups.list(all=True)
     
+    # Check if the current group is not in the ignored subgroups list
     if group.id not in ignored_subgroups and group.full_path not in ignored_subgroups:
         projects.extend(group.projects.list(all=True))
-        
+
+    subgroups = group.subgroups.list(all=True)
     for subgroup in subgroups:
         if subgroup.id not in ignored_subgroups and subgroup.full_path not in ignored_subgroups:
             subgroup = gl.groups.get(subgroup.id)
@@ -63,20 +64,27 @@ def get_all_projects(group, ignored_subgroups):
 def manage_project_webhooks(project, webhook_urls, webhook_data):
     """
     Check if each webhook exists in the project. If it does, update it. Otherwise, create it.
+    If there are duplicate webhooks with the same URL, update one and delete the others.
     """
     try:
         # Get the list of webhooks for the project
         existing_webhooks = project.hooks.list()
         
         for url in webhook_urls:
-            # Check if the webhook already exists
-            existing_webhook = next((hook for hook in existing_webhooks if hook.url == url), None)
+            # Find all webhooks with the specified URL
+            webhooks_with_url = [hook for hook in existing_webhooks if hook.url == url]
             
-            if existing_webhook:
-                # Update the existing webhook
-                existing_webhook.data.update(webhook_data)
-                existing_webhook.save()
+            if webhooks_with_url:
+                # Update the first webhook found with the URL
+                webhook_to_update = webhooks_with_url[0]
+                webhook_to_update.data.update(webhook_data)
+                webhook_to_update.save()
                 print(f"Updated webhook for project {project.name} with URL {url}")
+                
+                # Delete any additional webhooks with the same URL
+                for webhook in webhooks_with_url[1:]:
+                    webhook.delete()
+                    print(f"Deleted duplicate webhook for project {project.name} with URL {url}")
             else:
                 # Create a new webhook
                 project.hooks.create({'url': url, **webhook_data})
