@@ -18,6 +18,15 @@ WEBHOOK_DATA = {
     # Add other webhook settings as needed
 }
 
+# Integration settings
+INTEGRATION_NAME = 'slack'
+INTEGRATION_DATA = {
+    'webhook': 'https://hooks.slack.com/services/your/slack/webhook',
+    'username': 'GitLab',
+    'notify_only_broken_pipelines': True,
+    # Add other integration settings as needed
+}
+
 # List of subgroups to be ignored (by ID or path)
 IGNORED_SUBGROUPS = [
     'ignored_subgroup_id_or_path1',
@@ -92,6 +101,36 @@ def manage_project_webhooks(project, webhook_urls, webhook_data):
     except Exception as e:
         print(f"Failed to manage webhooks for project {project.name}: {e}")
 
+def manage_project_integrations(project, integration_name, integration_data):
+    """
+    Check if the integration exists in the project. If it does, update it. Otherwise, create it.
+    """
+    try:
+        # Get the integration settings for the project
+        integration = project.services.get(integration_name)
+        
+        # Check if the integration exists and is active
+        if integration.active:
+            # Update the integration settings
+            integration.data.update(integration_data)
+            integration.save()
+            print(f"Updated integration '{integration_name}' for project {project.name}")
+        else:
+            # Activate and configure the integration
+            integration.active = True
+            integration.data.update(integration_data)
+            integration.save()
+            print(f"Activated and configured integration '{integration_name}' for project {project.name}")
+    except gitlab.exceptions.GitlabGetError:
+        # Create and configure the integration if it does not exist
+        integration = project.services.create({
+            'name': integration_name,
+            **integration_data
+        })
+        print(f"Created and configured integration '{integration_name}' for project {project.name}")
+    except Exception as e:
+        print(f"Failed to manage integration '{integration_name}' for project {project.name}: {e}")
+
 def main():
     # Connect to GitLab
     global gl
@@ -113,6 +152,9 @@ def main():
         
         # Manage project webhooks
         manage_project_webhooks(project, WEBHOOK_URLS, WEBHOOK_DATA)
+
+        # Manage project integrations
+        manage_project_integrations(project, INTEGRATION_NAME, INTEGRATION_DATA)
 
 if __name__ == "__main__":
     main()
