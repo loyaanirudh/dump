@@ -9,7 +9,7 @@ JIRA_API_TOKEN = 'your-jira-api-token'
 
 GITLAB_SERVER = 'https://gitlab.com'
 GITLAB_PRIVATE_TOKEN = 'your-gitlab-private-token'
-GITLAB_PROJECT_ID = 12345678  # Replace with your GitLab project ID
+GITLAB_PARENT_GROUP_ID = 12345678  # Replace with your GitLab parent group ID
 
 # Initialize Jira and GitLab clients
 jira_client = jira.JIRA(server=JIRA_SERVER, basic_auth=(JIRA_USER, JIRA_API_TOKEN))
@@ -26,6 +26,15 @@ def get_jira_fix_version(issue_key):
         print(f"Error fetching Jira issue {issue_key}: {e}")
         return None
 
+def get_projects_from_group(group_id):
+    try:
+        group = gl.groups.get(group_id)
+        projects = group.projects.list(all=True)
+        return [project for project in projects]
+    except gitlab.GitlabGetError as e:
+        print(f"Error fetching projects from GitLab group: {e}")
+        return []
+
 def get_gitlab_branches(project_id):
     try:
         project = gl.projects.get(project_id)
@@ -37,37 +46,43 @@ def get_gitlab_branches(project_id):
 
 def extract_jira_keys_from_branches(branch_names):
     jira_keys = []
-    pattern = re.compile(r'\bMINPRO-\d+\b')  # Pattern for Jira issue keys starting with 
+    pattern = re.compile(r'\bMARGINPRO-\d+\b')  # Pattern for Jira issue keys starting with "MARGINPRO"
     for name in branch_names:
         match = pattern.search(name)
         if match:
             jira_keys.append(match.group())
     return jira_keys
 
-def update_gitlab_fix_version_by_branch(project_id, branch_name, fix_version):
+def get_or_create_gitlab_milestone(project, milestone_title):
+    milestones = project.milestones.list()
+    for milestone in milestones:
+        if milestone.title == milestone_title:
+            return milestone
+    # Create milestone if it does not exist
+    return project.milestones.create({'title': milestone_title})
+
+def update_gitlab_milestone(project_id, milestone_title):
     try:
         project = gl.projects.get(project_id)
-        issues = project.issues.list()
-        for issue in issues:
-            if branch_name in issue.references['full']:
-                issue.description += f"\n\nFix Version: {fix_version}"
-                issue.save()
-                print(f"Updated GitLab issue with fix version: {fix_version}")
-                return
-        print(f"No GitLab issue found for branch: {branch_name}")
+        milestone = get_or_create_gitlab_milestone(project, milestone_title)
+        print(f"Updated or created GitLab milestone: {milestone_title} in project {project_id}")
     except gitlab.GitlabGetError as e:
-        print(f"Error updating GitLab issue: {e}")
+        print(f"Error updating GitLab milestone in project {project_id}: {e}")
 
 def main():
-    branch_names = get_gitlab_branches(GITLAB_PROJECT_ID)
-    jira_keys = extract_jira_keys_from_branches(branch_names)
+    projects = get_projects_from_group(GITLAB_PARENT_GROUP_ID)
 
-    for jira_key in jira_keys:
-        fix_version = get_jira_fix_version(jira_key)
-        if fix_version:
-            update_gitlab_fix_version_by_branch(GITLAB_PROJECT_ID, jira_key, fix_version)
-        else:
-            print(f"No fix version found in Jira issue: {jira_key}")
+    for project in projects:
+        project_id = project.id
+        branch_names = get_gitlab_branches(project_id)
+        jira_keys = extract_jira_keys_from_branches(branch_names)
+
+        for jira_key in jira_keys:
+            fix_version = get_jira_fix_version(jira_key)
+            if fix_version:
+                update_gitlab_milestone(project_id, fix_version)
+            else:
+                print(f"No fix version found in Jira issue: {jira_key}")
 
 if __name__ == "__main__":
     main()
