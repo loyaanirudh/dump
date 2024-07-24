@@ -18,6 +18,13 @@ WEBHOOK_DATA = {
     # Add other webhook settings as needed
 }
 
+# List of subgroups to be ignored (by ID or path)
+IGNORED_SUBGROUPS = [
+    'ignored_subgroup_id_or_path1',
+    'ignored_subgroup_id_or_path2',
+    # Add other subgroup IDs or paths to be ignored
+]
+
 def update_project_settings(project):
     """
     Update the settings of a given project.
@@ -35,14 +42,22 @@ def update_project_settings(project):
     except Exception as e:
         print(f"Failed to update project {project.name}: {e}")
 
-def get_all_projects(group):
+def get_all_projects(group, ignored_subgroups):
     """
-    Recursively fetch all projects in the group and its subgroups.
+    Recursively fetch all projects in the group and its subgroups,
+    excluding those in the ignored subgroups.
     """
-    projects = group.projects.list(all=True)
-    for subgroup in group.subgroups.list(all=True):
-        subgroup = gl.groups.get(subgroup.id)
-        projects.extend(get_all_projects(subgroup))
+    projects = []
+    subgroups = group.subgroups.list(all=True)
+    
+    if group.id not in ignored_subgroups and group.full_path not in ignored_subgroups:
+        projects.extend(group.projects.list(all=True))
+        
+    for subgroup in subgroups:
+        if subgroup.id not in ignored_subgroups and subgroup.full_path not in ignored_subgroups:
+            subgroup = gl.groups.get(subgroup.id)
+            projects.extend(get_all_projects(subgroup, ignored_subgroups))
+            
     return projects
 
 def manage_project_webhooks(project, webhook_urls, webhook_data):
@@ -71,13 +86,14 @@ def manage_project_webhooks(project, webhook_urls, webhook_data):
 
 def main():
     # Connect to GitLab
+    global gl
     gl = gitlab.Gitlab(GITLAB_URL, private_token=PRIVATE_TOKEN)
 
     # Get the group
     group = gl.groups.get(GROUP_ID)
 
     # Get all projects in the group and its subgroups
-    projects = get_all_projects(group)
+    projects = get_all_projects(group, IGNORED_SUBGROUPS)
 
     # Update settings and manage webhooks for each project
     for project in projects:
