@@ -1,0 +1,96 @@
+import gitlab
+import yaml
+import json
+
+def update_project_settings(project):
+    """
+    Update the settings of a given project.
+    """
+    try:
+        # Example: Update the visibility level to private
+        project.visibility = 'private'
+        
+        # Example: Enable merge requests
+        project.merge_requests_enabled = True
+        
+        # Save changes
+        project.save()
+        print(f"Updated project {project.name}")
+    except Exception as e:
+        print(f"Failed to update project {project.name}: {e}")
+
+def get_all_projects(group):
+    """
+    Recursively fetch all projects in the group and its subgroups.
+    """
+    projects = group.projects.list(all=True)
+    for subgroup in group.subgroups.list(all=True):
+        subgroup = gl.groups.get(subgroup.id)
+        projects.extend(get_all_projects(subgroup))
+    return projects
+
+def manage_project_webhook(project, webhook_url, webhook_data):
+    """
+    Check if the webhook exists in the project. If it does, update it. Otherwise, create it.
+    """
+    try:
+        # Get the list of webhooks for the project
+        webhooks = project.hooks.list()
+        
+        # Check if the webhook already exists
+        existing_webhook = next((hook for hook in webhooks if hook.url == webhook_url), None)
+        
+        if existing_webhook:
+            # Update the existing webhook
+            existing_webhook.data.update(webhook_data)
+            existing_webhook.save()
+            print(f"Updated webhook for project {project.name}")
+        else:
+            # Create a new webhook
+            project.hooks.create({'url': webhook_url, **webhook_data})
+            print(f"Created new webhook for project {project.name}")
+    except Exception as e:
+        print(f"Failed to manage webhook for project {project.name}: {e}")
+
+def load_webhook_settings(file_path):
+    """
+    Load webhook settings from a YAML or JSON file.
+    """
+    with open(file_path, 'r') as file:
+        if file_path.endswith('.yaml') or file_path.endswith('.yml'):
+            return yaml.safe_load(file)
+        elif file_path.endswith('.json'):
+            return json.load(file)
+        else:
+            raise ValueError("Unsupported file format. Use a .yaml, .yml, or .json file.")
+
+def main():
+    # Connect to GitLab
+    gl = gitlab.Gitlab('https://gitlab.com', private_token='your_private_token')
+
+    # Group ID or path
+    group_id = 'your_group_id_or_path'
+
+    # Load webhook settings from an external file
+    webhook_settings = load_webhook_settings('webhook_settings.yaml')
+    webhook_url = webhook_settings.pop('url')
+
+    # Get the group
+    group = gl.groups.get(group_id)
+
+    # Get all projects in the group and its subgroups
+    projects = get_all_projects(group)
+
+    # Update settings and manage webhook for each project
+    for project in projects:
+        # Get the full project information
+        project = gl.projects.get(project.id)
+        
+        # Update project settings
+        update_project_settings(project)
+        
+        # Manage project webhook
+        manage_project_webhook(project, webhook_url, webhook_settings)
+
+if __name__ == "__main__":
+    main()
