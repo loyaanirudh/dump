@@ -10,6 +10,7 @@ JIRA_API_TOKEN = 'your-jira-api-token'
 GITLAB_SERVER = 'https://gitlab.com'
 GITLAB_PRIVATE_TOKEN = 'your-gitlab-private-token'
 GITLAB_PARENT_GROUP_ID = 12345678  # Replace with your GitLab parent group ID
+FIX_VERSION_PATTERN = r'^1\.0\.'  # Replace with the pattern you want to match
 
 # Initialize Jira and GitLab clients
 jira_client = jira.JIRA(server=JIRA_SERVER, basic_auth=(JIRA_USER, JIRA_API_TOKEN))
@@ -19,8 +20,10 @@ def get_jira_fix_version(issue_key):
     try:
         issue = jira_client.issue(issue_key)
         fix_versions = issue.fields.fixVersions
-        if fix_versions:
-            return fix_versions[0].name
+        # Filter fix versions based on the pattern
+        matching_versions = [fv.name for fv in fix_versions if re.match(FIX_VERSION_PATTERN, fv.name)]
+        if matching_versions:
+            return matching_versions[0]  # Return the first matching version
         return None
     except jira.JIRAError as e:
         print(f"Error fetching Jira issue {issue_key}: {e}")
@@ -44,14 +47,20 @@ def get_gitlab_branches(project_id):
         print(f"Error fetching GitLab branches: {e}")
         return []
 
-def extract_jira_keys_from_branches(branch_names):
-    jira_keys = []
+def get_merge_requests(project_id):
+    try:
+        project = gl.projects.get(project_id)
+        return project.mergerequests.list(state='opened', all=True)
+    except gitlab.GitlabGetError as e:
+        print(f"Error fetching merge requests from GitLab project {project_id}: {e}")
+        return []
+
+def extract_jira_keys_from_branch(branch_name):
     pattern = re.compile(r'\bMARGINPRO-\d+\b')  # Pattern for Jira issue keys starting with "MARGINPRO"
-    for name in branch_names:
-        match = pattern.search(name)
-        if match:
-            jira_keys.append(match.group())
-    return jira_keys
+    match = pattern.search(branch_name)
+    if match:
+        return match.group()
+    return None
 
 def get_or_create_gitlab_milestone(project, milestone_title):
     milestones = project.milestones.list()
@@ -61,19 +70,11 @@ def get_or_create_gitlab_milestone(project, milestone_title):
     # Create milestone if it does not exist
     return project.milestones.create({'title': milestone_title})
 
-def tag_merge_requests_with_milestone(project_id, milestone_title):
-    try:
-        project = gl.projects.get(project_id)
-        milestone = get_or_create_gitlab_milestone(project, milestone_title)
-
-        merge_requests = project.mergerequests.list(state='opened', all=True)
-        for mr in merge_requests:
-            if milestone_title not in [m.title for m in mr.milestones.list()]:
-                mr.milestones.create({'title': milestone_title})
-                print(f"Tagged merge request {mr.id} with milestone: {milestone_title}")
-
-    except gitlab.GitlabGetError as e:
-        print(f"Error tagging merge requests in project {project_id}: {e}")
+def tag_merge_request_with_milestone(mr, milestone_title):
+    existing_milestones = [m.title for m in mr.milestones.list()]
+    if milestone_title not in existing_milestones:
+        mr.milestones.create({'title': milestone_title})
+        print(f"Tagged merge request {mr.id} with milestone: {milestone_title}")
 
 def main():
     projects = get_projects_from_group(GITLAB_PARENT_GROUP_ID)
@@ -81,14 +82,25 @@ def main():
     for project in projects:
         project_id = project.id
         branch_names = get_gitlab_branches(project_id)
-        jira_keys = extract_jira_keys_from_branches(branch_names)
+        merge_requests = get_merge_requests(project_id)
+        
+        # Create a map from branch names to Jira keys and fix versions
+        branch_to_jira_key = {}
+        for branch_name in branch_names:
+            jira_key = extract_jira_keys_from_branch(branch_name)
+            if jira_key:
+                fix_version = get_jira_fix_version(jira_key)
+                if fix_version:
+                    branch_to_jira_key[branch_name] = fix_version
 
-        for jira_key in jira_keys:
-            fix_version = get_jira_fix_version(jira_key)
-            if fix_version:
-                tag_merge_requests_with_milestone(project_id, fix_version)
-            else:
-                print(f"No fix version found in Jira issue: {jira_key}")
+        # Process merge requests
+        for mr in merge_requests:
+            # Extract the branch name from the merge request
+            branch_name = mr.source_branch
+            if branch_name in branch_to_jira_key:
+                fix_version = branch_to_jira_key[branch_name]
+                if fix_version:
+                    tag_merge_request_with_milestone(mr, fix_version)
 
 if __name__ == "__main__":
     main()
