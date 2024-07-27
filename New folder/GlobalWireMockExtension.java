@@ -47,13 +47,36 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
                     String dataFilePath = (overrideMockDataFilePath != null) ? overrideMockDataFilePath : config.get("mockDataFilePath");
                     String responseFormat = config.get("responseFormat");
                     String notFoundResponseFormat = config.get("notFoundResponseFormat");
-                    setupGraphQLStub(endpoint, dataFilePath, responseFormat, notFoundResponseFormat);
+
+                    if (endpoint.contains("graphql")) {
+                        setupGraphQLStub(endpoint, dataFilePath, responseFormat, notFoundResponseFormat);
+                    } else {
+                        setupRestStub(endpoint, dataFilePath);
+                    }
                 });
             } else {
                 log.error("Mock configuration file not found");
             }
         } catch (IOException e) {
             log.error("Failed to load mock configuration: {}", e.getMessage());
+        }
+    }
+
+    private void setupRestStub(String endpoint, String mockDataFilePath) {
+        try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
+            if (mockDataStream != null) {
+                String mockData = IOUtils.toString(mockDataStream, "UTF-8");
+
+                wireMockServer.stubFor(WireMock.get(WireMock.urlEqualTo(endpoint))
+                        .willReturn(WireMock.aResponse()
+                                .withHeader("Content-Type", "application/json")
+                                .withBody(mockData)));
+                log.info("Stubbed endpoint {} with mock data from file {}", endpoint, mockDataFilePath);
+            } else {
+                log.error("Mock data file not found: {}", mockDataFilePath);
+            }
+        } catch (IOException e) {
+            log.error("Failed to setup stub for endpoint {}: {}", endpoint, e.getMessage());
         }
     }
 
@@ -70,13 +93,15 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
                         .withHeader("Content-Type", WireMock.equalTo("application/json"))
                         .willReturn(WireMock.aResponse()
                             .withHeader("Content-Type", "application/json")
-                            .withBody(request -> {
+                            .withTransformers((request, responseDefinition, fileSource, parameters) -> {
+                                String requestBody = request.getBodyAsString();
                                 if (responseFormat == null && notFoundResponseFormat == null) {
-                                    // Return whatever is received from the API
-                                    return mockData;
+                                    // Return the full mock data as the response
+                                    return WireMock.response().withBody(mockData).build();
                                 } else {
-                                    int requestedId = getRequestedIdFromRequest(request.getBodyAsString());
-                                    return processRequest(mockDataList, responseFormat, notFoundResponseFormat, requestedId);
+                                    int requestedId = getRequestedIdFromRequest(requestBody);
+                                    String body = processRequest(mockDataList, responseFormat, notFoundResponseFormat, requestedId);
+                                    return WireMock.response().withBody(body).build();
                                 }
                             })
                         )
