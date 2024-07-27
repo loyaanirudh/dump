@@ -4,7 +4,10 @@ import com.github.jknack.handlebars.Template;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.extension.ResponseTransformer;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.ResponseTemplateTransformer;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.HandlebarsVariableDynamicScope;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.HandlebarsHelpers;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.ResponseTemplateTransformerHelper;
 import com.github.tomakehurst.wiremock.http.Request;
 import com.github.tomakehurst.wiremock.http.Response;
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
@@ -79,34 +82,29 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
         try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
             if (mockDataStream != null) {
                 String mockData = IOUtils.toString(mockDataStream, "UTF-8");
-
-                wireMockServer.stubFor(WireMock.get(WireMock.urlEqualTo(endpoint))
+                wireMockServer.stubFor(WireMock.get(WireMock.urlPathMatching(endpoint))
                         .willReturn(WireMock.aResponse()
                                 .withHeader("Content-Type", "application/json")
                                 .withBody(mockData)));
-                log.info("Stubbed endpoint {} with mock data from file {}", endpoint, mockDataFilePath);
             } else {
                 log.error("Mock data file not found: {}", mockDataFilePath);
             }
         } catch (IOException e) {
-            log.error("Failed to setup stub for endpoint {}: {}", endpoint, e.getMessage());
+            log.error("Failed to set up REST stub for endpoint {}: {}", endpoint, e.getMessage());
         }
     }
 
     private void setupGraphQLStub(String endpoint, String mockDataFilePath, String responseFormat, String notFoundResponseFormat) {
-        wireMockServer.stubFor(
-                WireMock.post(WireMock.urlEqualTo(endpoint))
-                        .willReturn(WireMock.aResponse()
-                                .withHeader("Content-Type", "application/json")
-                                .withTransformers("graphql-transformer")
-                                .withTransformerParameter("mockDataFilePath", mockDataFilePath)
-                                .withTransformerParameter("responseFormat", responseFormat)
-                                .withTransformerParameter("notFoundResponseFormat", notFoundResponseFormat)
-                        ));
-        log.info("Stubbed GraphQL endpoint {} with mock data file {}", endpoint, mockDataFilePath);
+        wireMockServer.stubFor(WireMock.post(WireMock.urlPathMatching(endpoint))
+                .willReturn(WireMock.aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withTransformerParameters(Parameters.one("mockDataFilePath", mockDataFilePath)
+                                .and("responseFormat", responseFormat)
+                                .and("notFoundResponseFormat", notFoundResponseFormat))
+                        .withTransformers(new GraphQLResponseTransformer())));
     }
 
-    public static WireMockServer getWireMockServer() {
-        return wireMockServer;
+    public static int getPort() {
+        return wireMockServer.port();
     }
 }
