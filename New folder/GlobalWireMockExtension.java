@@ -2,15 +2,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.jknack.handlebars.io.StringTemplateSource;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
-import com.github.tomakehurst.wiremock.extension.responsetemplating.ResponseTemplateTransformer;
-import com.github.tomakehurst.wiremock.extension.responsetemplating.HandlebarsVariableDynamicScope;
-import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.HandlebarsHelpers;
-import com.github.tomakehurst.wiremock.extension.responsetemplating.helpers.ResponseTemplateTransformerHelper;
-import com.github.tomakehurst.wiremock.http.Request;
-import com.github.tomakehurst.wiremock.http.Response;
-import com.github.tomakehurst.wiremock.http.ResponseDefinition;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -22,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+
 @Slf4j
 public class GlobalWireMockExtension implements TestInstancePostProcessor {
 
@@ -31,6 +27,7 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
     static {
         wireMockServer.start();
         log.info("Started WireMock server at port {}", wireMockServer.port());
+        System.setProperty("mock.server.url", "http://localhost:" + wireMockServer.port());
     }
 
     @Override
@@ -63,6 +60,11 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
                     String dataFilePath = (overrideMockDataFilePath != null) ? overrideMockDataFilePath : config.get("mockDataFilePath");
                     String responseFormat = config.get("responseFormat");
                     String notFoundResponseFormat = config.get("notFoundResponseFormat");
+                    String propertyToUpdate = config.get("propertyToUpdate");
+
+                    if (propertyToUpdate != null && !propertyToUpdate.isEmpty()) {
+                        System.setProperty(propertyToUpdate, "http://localhost:" + wireMockServer.port() + endpoint);
+                    }
 
                     if (endpoint.contains("graphql")) {
                         setupGraphQLStub(endpoint, dataFilePath, responseFormat, notFoundResponseFormat);
@@ -70,41 +72,85 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
                         setupRestStub(endpoint, dataFilePath);
                     }
                 });
-            } else {
-                log.error("Mock configuration file not found");
             }
         } catch (IOException e) {
-            log.error("Failed to load mock configuration: {}", e.getMessage());
-        }
-    }
-
-    private void setupRestStub(String endpoint, String mockDataFilePath) {
-        try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
-            if (mockDataStream != null) {
-                String mockData = IOUtils.toString(mockDataStream, "UTF-8");
-                wireMockServer.stubFor(WireMock.get(WireMock.urlPathMatching(endpoint))
-                        .willReturn(WireMock.aResponse()
-                                .withHeader("Content-Type", "application/json")
-                                .withBody(mockData)));
-            } else {
-                log.error("Mock data file not found: {}", mockDataFilePath);
-            }
-        } catch (IOException e) {
-            log.error("Failed to set up REST stub for endpoint {}: {}", endpoint, e.getMessage());
+            log.error("Failed to read mock config: {}", e.getMessage());
         }
     }
 
     private void setupGraphQLStub(String endpoint, String mockDataFilePath, String responseFormat, String notFoundResponseFormat) {
-        wireMockServer.stubFor(WireMock.post(WireMock.urlPathMatching(endpoint))
-                .willReturn(WireMock.aResponse()
-                        .withHeader("Content-Type", "application/json")
-                        .withTransformerParameters(Parameters.one("mockDataFilePath", mockDataFilePath)
-                                .and("responseFormat", responseFormat)
-                                .and("notFoundResponseFormat", notFoundResponseFormat))
-                        .withTransformers(new GraphQLResponseTransformer())));
+        wireMockServer.stubFor(post(urlPathEqualTo(endpoint))
+                .willReturn(aResponse().withTransformers((request, responseDefinition, files, parameters) -> {
+                    String requestBody = request.getBodyAsString();
+                    String body = processGraphQLRequest(mockDataFilePath, responseFormat, notFoundResponseFormat, requestBody);
+                    return ResponseDefinitionBuilder.like(responseDefinition).but().withBody(body).build();
+                })));
     }
 
-    public static int getPort() {
-        return wireMockServer.port();
+    private String processGraphQLRequest(String mockDataFilePath, String responseTemplate, String notFoundResponseTemplate, String requestBody) {
+        try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
+            String mockData = mockDataStream != null ? IOUtils.toString(mockDataStream, "UTF-8") : null;
+
+            if (mockData != null) {
+                ObjectMapper objectMapper = new ObjectMapper();
+                List<Map<String, Object>> mockDataList = objectMapper.readValue(mockData, List.class);
+
+                if (responseTemplate == null && notFoundResponseTemplate == null) {
+                    return mockData; // Return the full mock data as the response
+                } else {
+                    int requestedId = getRequestedIdFromRequest(requestBody);
+                    return processRequest(mockDataList, responseTemplate, notFoundResponseTemplate, requestedId);
+                }
+            } else {
+                log.error("Mock data file not found: {}", mockDataFilePath);
+                return "{}";
+            }
+        } catch (IOException e) {
+            log.error("Failed to process GraphQL request: {}", e.getMessage());
+            return "{}";
+        }
+    }
+
+    private String processRequest(List<Map<String, Object>> mockDataList, String responseTemplate, String notFoundResponseTemplate, int requestedId) throws IOException {
+        if (responseTemplate == null || notFoundResponseTemplate == null) {
+            return "{}"; // Return an empty response if templates are not provided
+        }
+
+        for (Map<String, Object> mockEntry : mockDataList) {
+            if (mockEntry.get("id").equals(requestedId)) {
+                Template template = handlebars.compileInline(responseTemplate);
+                return template.apply(mockEntry);
+            }
+        }
+
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("id", requestedId);
+        Template template = handlebars.compileInline(notFoundResponseTemplate);
+        return template.apply(errorResponse);
+    }
+
+    private int getRequestedIdFromRequest(String requestBody) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> requestMap = objectMapper.readValue(requestBody, HashMap.class);
+            Map<String, Object> variables = (Map<String, Object>) requestMap.get("variables");
+            return (int) variables.get("id");
+        } catch (IOException e) {
+            log.error("Failed to extract ID from request: {}", e.getMessage());
+            return -1;
+        }
+    }
+
+    private void setupRestStub(String endpoint, String mockDataFilePath) {
+        wireMockServer.stubFor(get(urlPathEqualTo(endpoint))
+                .willReturn(aResponse().withTransformers((request, responseDefinition, files, parameters) -> {
+                    try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
+                        String mockData = mockDataStream != null ? IOUtils.toString(mockDataStream, "UTF-8") : null;
+                        return ResponseDefinitionBuilder.like(responseDefinition).but().withBody(mockData).build();
+                    } catch (IOException e) {
+                        log.error("Failed to process REST request: {}", e.getMessage());
+                        return ResponseDefinitionBuilder.like(responseDefinition).but().withBody("{}").build();
+                    }
+                })));
     }
 }
