@@ -3,9 +3,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
 public @interface MockConfiguration {
-    boolean useMock() default true;
-    String mockDataFilePath() default "";
+    String filePath() default "";
+    boolean enabled() default true; // Control mock configuration
 }
