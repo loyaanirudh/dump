@@ -1,58 +1,42 @@
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.AfterAllCallback;
-import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.io.IOUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.io.IOUtils;
 
 @Slf4j
 public class GlobalWireMockExtension implements BeforeAllCallback, AfterAllCallback {
 
-    private static WireMockServer wireMockServer;
-
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
-        if (wireMockServer == null) {
-            wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
-            wireMockServer.start();
-            log.info("WireMock server started on port {}", wireMockServer.port());
-            
-            if (isMockEnabled(context)) {
-                String mockConfigFilePath = getMockConfigFilePath(context);
-                log.info("Setting up stubs using mock configuration file: {}", mockConfigFilePath);
-                setupStubs(mockConfigFilePath);
-            } else {
-                log.info("Mock configuration is disabled for class: {}", context.getRequiredTestClass().getName());
-            }
+        WireMockServerManager.startServer();
+        if (isMockEnabled(context)) {
+            String mockConfigFilePath = getMockConfigFilePath(context);
+            log.info("Setting up stubs using mock configuration file: {}", mockConfigFilePath);
+            setupStubs(mockConfigFilePath);
+        } else {
+            log.info("Mock configuration is disabled for class: {}", context.getRequiredTestClass().getName());
         }
     }
 
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
-        if (wireMockServer != null) {
-            wireMockServer.stop();
-            log.info("WireMock server stopped.");
-            wireMockServer = null;
-        }
+        // Do not stop the server here; it's managed globally
     }
 
     private boolean isMockEnabled(ExtensionContext context) {
         MockConfiguration mockConfig = context.getRequiredTestClass().getAnnotation(MockConfiguration.class);
-        boolean enabled = mockConfig == null || mockConfig.enabled();
-        log.debug("Mock configuration enabled: {}", enabled);
-        return enabled;
+        return mockConfig == null || mockConfig.enabled();
     }
 
     private String getMockConfigFilePath(ExtensionContext context) {
         MockConfiguration mockConfig = context.getRequiredTestClass().getAnnotation(MockConfiguration.class);
-        String filePath = (mockConfig != null && !mockConfig.filePath().isEmpty()) ? mockConfig.filePath() : "/mockdata/mock-config.json";
-        log.debug("Using mock configuration file path: {}", filePath);
-        return filePath;
+        return (mockConfig != null && !mockConfig.filePath().isEmpty()) ? mockConfig.filePath() : "/mockdata/mock-config.json";
     }
 
     private void setupStubs(String mockConfigFilePath) throws IOException {
@@ -73,8 +57,7 @@ public class GlobalWireMockExtension implements BeforeAllCallback, AfterAllCallb
                 log.info("Setting up stub for endpoint: {}", endpoint);
                 setupStub(endpoint, mockDataFilePath);
                 if (propertyToUpdate != null && !propertyToUpdate.isEmpty()) {
-                    log.info("Updating system property {} with base URL {}", propertyToUpdate, wireMockServer.baseUrl());
-                    System.setProperty(propertyToUpdate, wireMockServer.baseUrl());
+                    System.setProperty(propertyToUpdate, WireMockServerManager.getWireMockServer().baseUrl());
                 }
             }
         }
@@ -84,7 +67,7 @@ public class GlobalWireMockExtension implements BeforeAllCallback, AfterAllCallb
         try (InputStream mockDataStream = getClass().getResourceAsStream("/mockdata/" + mockDataFilePath)) {
             if (mockDataStream != null) {
                 String mockData = IOUtils.toString(mockDataStream, "UTF-8");
-                wireMockServer.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo(endpoint))
+                WireMockServerManager.getWireMockServer().stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo(endpoint))
                         .willReturn(com.github.tomakehurst.wiremock.client.WireMock.aResponse()
                                 .withHeader("Content-Type", "application/json")
                                 .withBody(mockData)));
@@ -95,9 +78,5 @@ public class GlobalWireMockExtension implements BeforeAllCallback, AfterAllCallb
         } catch (IOException e) {
             log.error("Failed to setup stub for endpoint {} with mock data file {}: {}", endpoint, mockDataFilePath, e.getMessage());
         }
-    }
-
-    public static WireMockServer getWireMockServer() {
-        return wireMockServer;
     }
 }
