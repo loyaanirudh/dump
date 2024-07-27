@@ -31,11 +31,20 @@ public class GlobalWireMockExtension implements TestInstancePostProcessor {
         Class<?> testClass = testInstance.getClass();
         MockConfiguration mockConfig = testClass.getAnnotation(MockConfiguration.class);
 
-        if (mockConfig == null || mockConfig.enabled()) {
-            String mockDataFilePath = (mockConfig != null && !mockConfig.mockDataFilePath().isEmpty())
-                    ? mockConfig.mockDataFilePath() : null;
+        if (isMockEnabled(mockConfig)) {
+            String mockDataFilePath = getConfigFilePath(mockConfig);
             setupMockData(testClass, mockDataFilePath);
         }
+    }
+
+    private boolean isMockEnabled(MockConfiguration mockConfig) {
+        return mockConfig == null || mockConfig.enabled();
+    }
+
+    private String getConfigFilePath(MockConfiguration mockConfig) {
+        return mockConfig != null && !mockConfig.mockDataFilePath().isEmpty()
+                ? mockConfig.mockDataFilePath()
+                : null;
     }
 
     private void setupMockData(Class<?> testClass, String overrideMockDataFilePath) {
