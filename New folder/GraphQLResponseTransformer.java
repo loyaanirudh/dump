@@ -2,11 +2,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Template;
 import com.github.tomakehurst.wiremock.extension.Parameters;
-import com.github.tomakehurst.wiremock.extension.ResponseTransformer;
+import com.github.tomakehurst.wiremock.extension.responsetemplating.ResponseTemplateTransformer;
 import com.github.tomakehurst.wiremock.http.Request;
 import com.github.tomakehurst.wiremock.http.Response;
 import com.github.tomakehurst.wiremock.http.ResponseDefinition;
+import com.github.tomakehurst.wiremock.stubbing.ServeEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,9 +17,13 @@ import java.util.List;
 import java.util.Map;
 
 @Slf4j
-public class GraphQLResponseTransformer extends ResponseTransformer {
+public class GraphQLResponseTransformer extends ResponseTemplateTransformer {
 
     private static final Handlebars handlebars = new Handlebars();
+
+    public GraphQLResponseTransformer() {
+        super(true); // Enable global response templating
+    }
 
     @Override
     public String getName() {
@@ -25,12 +31,7 @@ public class GraphQLResponseTransformer extends ResponseTransformer {
     }
 
     @Override
-    public boolean applyGlobally() {
-        return false;
-    }
-
-    @Override
-    public Response transform(Request request, ResponseDefinition responseDefinition, Parameters parameters) {
+    public Response transform(ServeEvent serveEvent, Request request, ResponseDefinition responseDefinition, Parameters parameters) {
         String mockDataFilePath = parameters.getString("mockDataFilePath");
         String responseFormat = parameters.getString("responseFormat");
         String notFoundResponseFormat = parameters.getString("notFoundResponseFormat");
