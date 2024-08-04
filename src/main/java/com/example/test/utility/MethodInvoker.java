@@ -1,34 +1,15 @@
-package test;
+package com.example.test.utility;
+
+import com.example.test.model.Parameter;
 
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
-public class StepExecutor {
+public class MethodInvoker {
 
-    public void executeStep(Step step) {
-        switch (step.getAction()) {
-            case "CLEAN_DB":
-                cleanDatabase(step.getQuery(), step.getParameters());
-                break;
-            case "LOAD":
-                invokeMethod(step.getMethod(), step.getParameters());
-                break;
-            case "VERIFY":
-                verify(step.getExpectedOutputFile());
-                break;
-            default:
-                throw new UnsupportedOperationException("Unknown action: " + step.getAction());
-        }
-    }
-
-    private void cleanDatabase(String query, Map<String, Parameter> parameters) {
-        System.out.println("Executing DB cleanup with query: " + query + " and parameters: " + parameters);
-        // Implement database cleanup logic here
-    }
-
-    private void invokeMethod(String methodName, Map<String, Parameter> parameters) {
+    public void invokeMethod(String methodName, Map<String, Parameter> parameters) {
         try {
             String className = methodName.substring(0, methodName.lastIndexOf('.'));
             String method = methodName.substring(methodName.lastIndexOf('.') + 1);
@@ -68,10 +49,5 @@ public class StepExecutor {
         } catch (Exception e) {
             throw new RuntimeException("Error converting parameter: " + parameter.getType(), e);
         }
-    }
-
-    private void verify(String expectedOutputFile) {
-        System.out.println("Verifying against expected output: " + expectedOutputFile);
-        // Implement verification logic here
     }
 }

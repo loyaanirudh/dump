@@ -1,0 +1,55 @@
+{
+  "cleanupSteps": [
+    {
+      "id": "cleanup1",
+      "action": "CUSTOM_CLEAN",
+      "method": "com.example.test.MyCleanupClass.customClean",
+      "parameters": {
+        "businessDate": {
+          "value": "2023-01-01",
+          "type": "java.time.LocalDate"
+        }
+      }
+    }
+  ],
+  "loadingSteps": [
+    {
+      "id": "load1",
+      "action": "LOAD",
+      "method": "com.example.test.MyLoadClass.loadCsv",
+      "parameters": {
+        "id": {
+          "value": "order123",
+          "type": "java.lang.String"
+        },
+        "businessDate": {
+          "value": "2023-01-01",
+          "type": "java.time.LocalDate"
+        },
+        "filepath": {
+          "value": "src/test/resources/order_data.csv",
+          "type": "java.lang.String"
+        },
+        "check": {
+          "value": "true",
+          "type": "java.lang.Boolean"
+        }
+      },
+      "dependencies": ["cleanup1"]
+    }
+  ],
+  "verificationSteps": [
+    {
+      "id": "verify1",
+      "action": "VERIFY",
+      "method": "com.example.test.MyVerificationClass.verifyData",
+      "parameters": {
+        "expectedOutputFile": {
+          "value": "src/test/resources/expected_output.json",
+          "type": "java.lang.String"
+        }
+      },
+      "dependencies": ["load1"]
+    }
+  ]
+}
