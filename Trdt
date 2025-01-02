@@ -1,0 +1,41 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+ENV ci_commit_branch="{{ ci_commit_branch }}"
+ENV ci_commit_tag="{{ ci_commit_tag }}"
+
+# Check for ci_commit_tag first
+if [ -n "$ci_commit_tag" ]; then
+  echo "Building with tag: $ci_commit_tag"
+else
+  # Handle ci_commit_branch case
+  if [ -n "$ci_commit_branch" ]; then
+    RUN PACKAGE_VERSION=$(cat package.json | jq -r '.version')
+    RUN PACKAGE_NAME=$(cat package.json | jq -r '.name')
+
+    # Print variable values for debugging
+    echo "PACKAGE_VERSION: $PACKAGE_VERSION"
+    echo "PACKAGE_NAME: $PACKAGE_NAME"
+
+    # Create a new version based on the branch and snapshot
+    RUN NPM_VERSION="$PACKAGE_VERSION-$ci_commit_branch-SNAPSHOT"
+
+    echo "NPM_VERSION: $NPM_VERSION"
+
+    # Create a package with the new version
+    RUN npm pack "$PACKAGE_NAME"@"$NPM_VERSION"
+  fi
+fi
+
+# Copy the rest of the application code
+COPY . .
+
+# Build the application
+RUN npm run build 
+
+# ... other commands like starting the application ...
