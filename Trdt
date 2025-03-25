@@ -12,16 +12,9 @@
     }
   ],
   "options": {
-    "displayMode": "gradient",
-    "reduceOptions": {
-      "values": false,
-      "calcs": ["lastNotNull"]
-    },
+    "displayMode": "lcd",
     "orientation": "horizontal",
-    "showUnfilled": true,
-    "tooltip": {
-      "mode": "single"
-    }
+    "showUnfilled": true
   },
   "fieldConfig": {
     "defaults": {
