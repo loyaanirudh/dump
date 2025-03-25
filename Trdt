@@ -1,7 +1,16 @@
 {
+  "id": 1,
   "type": "bargauge",
   "title": "Feed Processing Status",
   "gridPos": { "x": 0, "y": 0, "w": 12, "h": 5 },
+  "datasource": "$datasource",
+  "targets": [
+    {
+      "expr": "100 * feed_processed_count_total / feed_total_count",
+      "legendFormat": "{{feed}} - {{application}}",
+      "refId": "A"
+    }
+  ],
   "options": {
     "displayMode": "gradient",
     "reduceOptions": {
@@ -22,9 +31,9 @@
       "thresholds": {
         "mode": "percentage",
         "steps": [
-          { "color": "green", "value": 80 },
+          { "color": "red", "value": 0 },
           { "color": "yellow", "value": 50 },
-          { "color": "red", "value": 0 }
+          { "color": "green", "value": 80 }
         ]
       },
       "custom": {
@@ -34,12 +43,5 @@
         }
       }
     }
-  },
-  "targets": [
-    {
-      "expr": "100 * feed_processed_count_total / feed_total_count",
-      "legendFormat": "{{feed}} - {{application}}",
-      "refId": "A"
-    }
-  ]
+  }
 }
