@@ -3,12 +3,13 @@
   "type": "bargauge",
   "title": "Feed Processing Status",
   "gridPos": { "x": 0, "y": 0, "w": 12, "h": 5 },
-  "datasource": "$datasource",
+  "datasource": "${datasource}",
   "targets": [
     {
+      "refId": "A",
+      "datasource": "${datasource}",
       "expr": "100 * feed_processed_count_total / feed_total_count",
-      "legendFormat": "{{feed}} - {{application}}",
-      "refId": "A"
+      "legendFormat": "{{feed}} - {{application}}"
     }
   ],
   "options": {
@@ -33,8 +34,10 @@
         "hideFrom": {
           "tooltip": false,
           "viz": false
-        }
+        },
+        "displayName": null
       }
-    }
+    },
+    "overrides": []
   }
 }
