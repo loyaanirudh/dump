@@ -1,107 +1,56 @@
 {
-  "dashboard": {
-    "id": null,
-    "title": "Feed Processing Status",
-    "panels": [
-      {
-        "type": "bargauge",
-        "title": "Feed Processing Status (Bar Gauge)",
-        "datasource": "${datasource}",
-        "targets": [
-          {
-            "refId": "A",
-            "datasource": "${datasource}",
-            "expr": "100 * feed_processed_count_total / feed_total_count",
-            "legendFormat": "Processing Percentage"
-          }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "percent",
-            "decimals": 1,
-            "min": 0,
-            "max": 100,
-            "color": {
-              "mode": "continuous-GrYlRd"
-            },
-            "links": [
-              {
-                "title": "Processed: ${__data.fields.processed} / Total: ${__data.fields.total}",
-                "url": "",
-                "targetBlank": false
-              }
-            ]
-          }
-        },
-        "options": {
-          "orientation": "horizontal",
-          "displayMode": "lcd"
-        },
-        "gridPos": {
-          "h": 6,
-          "w": 12,
-          "x": 0,
-          "y": 0
-        }
+  "type": "stat",
+  "title": "Feed Processing Status (Stat Panel)",
+  "datasource": "${datasource}",
+  "targets": [
+    {
+      "refId": "A",
+      "datasource": "${datasource}",
+      "expr": "feed_processed_count_total",
+      "legendFormat": "Processed"
+    },
+    {
+      "refId": "B",
+      "datasource": "${datasource}",
+      "expr": "feed_total_count",
+      "legendFormat": "Total"
+    }
+  ],
+  "fieldConfig": {
+    "defaults": {
+      "unit": "short",
+      "decimals": 0,
+      "color": {
+        "mode": "thresholds"
       },
-      {
-        "type": "stat",
-        "title": "Feed Processing Status (Stat Panel)",
-        "datasource": "${datasource}",
-        "targets": [
+      "thresholds": {
+        "mode": "absolute",
+        "steps": [
           {
-            "refId": "A",
-            "datasource": "${datasource}",
-            "expr": "feed_processed_count_total",
-            "legendFormat": "Processed"
+            "color": "green",
+            "value": 0
           },
           {
-            "refId": "B",
-            "datasource": "${datasource}",
-            "expr": "feed_total_count",
-            "legendFormat": "Total"
+            "color": "red",
+            "value": 80
           }
-        ],
-        "fieldConfig": {
-          "defaults": {
-            "unit": "short",
-            "decimals": 0,
-            "color": {
-              "mode": "thresholds"
-            },
-            "thresholds": {
-              "mode": "absolute",
-              "steps": [
-                {
-                  "color": "green",
-                  "value": 0
-                },
-                {
-                  "color": "red",
-                  "value": 80
-                }
-              ]
-            }
-          }
-        },
-        "options": {
-          "reduceOptions": {
-            "calcs": ["mean"],
-            "fields": "",
-            "values": false
-          },
-          "orientation": "horizontal",
-          "textMode": "auto"
-        },
-        "gridPos": {
-          "h": 6,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        }
+        ]
       }
-    ],
-    "schemaVersion": 36,
-    "version": 1
+    }
+  },
+  "options": {
+    "reduceOptions": {
+      "calcs": ["mean"],
+      "fields": "",
+      "values": false
+    },
+    "orientation": "horizontal",
+    "textMode": "auto"
+  },
+  "gridPos": {
+    "h": 6,
+    "w": 12,
+    "x": 12,
+    "y": 0
   }
 }
