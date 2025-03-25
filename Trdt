@@ -1,43 +1,107 @@
 {
-  "id": 1,
-  "type": "bargauge",
-  "title": "Feed Processing Status",
-  "gridPos": { "x": 0, "y": 0, "w": 12, "h": 5 },
-  "datasource": "${datasource}",
-  "targets": [
-    {
-      "refId": "A",
-      "datasource": "${datasource}",
-      "expr": "100 * feed_processed_count_total / feed_total_count",
-      "legendFormat": "{{feed}} - {{application}}"
-    }
-  ],
-  "options": {
-    "displayMode": "lcd",
-    "orientation": "horizontal",
-    "showUnfilled": true
-  },
-  "fieldConfig": {
-    "defaults": {
-      "unit": "percent",
-      "decimals": 1,
-      "mappings": [],
-      "thresholds": {
-        "mode": "percentage",
-        "steps": [
-          { "color": "red", "value": 0 },
-          { "color": "yellow", "value": 50 },
-          { "color": "green", "value": 80 }
-        ]
-      },
-      "custom": {
-        "hideFrom": {
-          "tooltip": false,
-          "viz": false
+  "dashboard": {
+    "id": null,
+    "title": "Feed Processing Status",
+    "panels": [
+      {
+        "type": "bargauge",
+        "title": "Feed Processing Status (Bar Gauge)",
+        "datasource": "${datasource}",
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": "${datasource}",
+            "expr": "100 * feed_processed_count_total / feed_total_count",
+            "legendFormat": "Processing Percentage"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 1,
+            "min": 0,
+            "max": 100,
+            "color": {
+              "mode": "continuous-GrYlRd"
+            },
+            "links": [
+              {
+                "title": "Processed: ${__data.fields.processed} / Total: ${__data.fields.total}",
+                "url": "",
+                "targetBlank": false
+              }
+            ]
+          }
         },
-        "displayName": null
+        "options": {
+          "orientation": "horizontal",
+          "displayMode": "lcd"
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "type": "stat",
+        "title": "Feed Processing Status (Stat Panel)",
+        "datasource": "${datasource}",
+        "targets": [
+          {
+            "refId": "A",
+            "datasource": "${datasource}",
+            "expr": "feed_processed_count_total",
+            "legendFormat": "Processed"
+          },
+          {
+            "refId": "B",
+            "datasource": "${datasource}",
+            "expr": "feed_total_count",
+            "legendFormat": "Total"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 0,
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "green",
+                  "value": 0
+                },
+                {
+                  "color": "red",
+                  "value": 80
+                }
+              ]
+            }
+          }
+        },
+        "options": {
+          "reduceOptions": {
+            "calcs": ["mean"],
+            "fields": "",
+            "values": false
+          },
+          "orientation": "horizontal",
+          "textMode": "auto"
+        },
+        "gridPos": {
+          "h": 6,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
       }
-    },
-    "overrides": []
+    ],
+    "schemaVersion": 36,
+    "version": 1
   }
 }
