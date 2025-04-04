@@ -6,8 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Service
 public class PdfReaderService {
@@ -33,39 +31,32 @@ public class PdfReaderService {
     private void logExtractedData(String text) {
         Map<String, String> extractedValues = new LinkedHashMap<>();
 
-        // Define regex patterns for all required fields
-        Map<String, String> patterns = Map.of(
-            "Business Date", "Business Date:\\s*(\\d{2}-[A-Za-z]+-\\d{4})",
-            "Run Date", "Run Date:\\s*(\\d{2}-[A-Za-z]+-\\d{4})",
-            "Run Time", "Run Time:\\s*([0-9:]+)",
-            "Currency", "Currency\\s+(\\w+)",
-            "Cash before Cover Calling", "Cash before Cover Calling .*? ([0-9.,]+ CR?)",
-            "Requirements", "Requirements .*? ([0-9.,]+)",
-            "LEVEL 1 REQUIREMENT", "LEVEL 1 REQUIREMENT \45%\\\s+([0-9.,]+)",
-            "LEVEL 1 CASH", "\\+ LEVEL 1 CASH\\s+([0-9.,]+)",
-            "LEVEL 2 REQUIREMENT", "LEVEL 2 REQUIREMENT \20%\\\s+([0-9.,]+)",
-            "LEVEL 2 SURPLUS/DEFICIT", "LEVEL 2 SURPLUS/DEFICIT\\s+([0-9.,]+)",
-            "LEVEL 3 REQUIREMENT", "LEVEL 3 REQUIREMENT \35%\\\s+([0-9.,]+)",
-            "LEVEL 3 SURPLUS/DEFICIT", "LEVEL 3 SURPLUS/DEFICIT\\s+([0-9.,]+)",
-            "Total Deficiency in USD", "Total Deficiency in USD\\s+([0-9.,]+)",
-            "Cash Call in USD", "Cash Call in USD\\s+([0-9.,]+)",
-            "Cash USD", "Cash USD\\s+([0-9.,]+ CR?)"
-        );
+        // List of labels we want to extract
+        String[] labels = {
+            "Business Date", "Run Date", "Run Time", "Currency",
+            "Cash before Cover Calling", "Requirements",
+            "LEVEL 1 REQUIREMENT", "LEVEL 1 CASH",
+            "LEVEL 2 REQUIREMENT", "LEVEL 2 SURPLUS/DEFICIT",
+            "LEVEL 3 REQUIREMENT", "LEVEL 3 SURPLUS/DEFICIT",
+            "Total Deficiency in USD", "Cash Call in USD",
+            "Cash USD"
+        };
 
-        // Extract values
-        for (Map.Entry<String, String> entry : patterns.entrySet()) {
-            extractedValues.put(entry.getKey(), extractValue(text, entry.getValue()));
+        // Process each line in the extracted text
+        String[] lines = text.split("\n");
+        for (String line : lines) {
+            for (String label : labels) {
+                if (line.contains(label)) {
+                    // Extract value after label
+                    String value = line.replace(label, "").trim();
+                    extractedValues.put(label, value);
+                }
+            }
         }
 
         // Log extracted values
         extractedValues.forEach((key, value) -> 
             System.out.println(key + ": " + value)
         );
-    }
-
-    private String extractValue(String text, String regex) {
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(text);
-        return matcher.find() ? matcher.group(1) : "Not Found";
     }
 }
