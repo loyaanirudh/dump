@@ -1,62 +1,81 @@
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
-import org.springframework.stereotype.Service;
-
+import org.apache.pdfbox.text.TextPosition;
 import java.io.File;
 import java.io.IOException;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 
-@Service
-public class PdfReaderService {
+public class DynamicBoxExtractor extends PDFTextStripper {
+    
+    private final Map<String, List<TextPosition>> textPositions = new LinkedHashMap<>();
 
-    public void extractDataFromPdf(String filePath) {
+    public DynamicBoxExtractor() throws IOException {
+        super.setSortByPosition(true);
+    }
+
+    @Override
+    protected void writeString(String string, List<TextPosition> textPositions) {
+        this.textPositions.put(string, textPositions);
+    }
+
+    public static void extractData(String filePath) {
         try (PDDocument document = PDDocument.load(new File(filePath))) {
-            PDFTextStripper pdfStripper = new PDFTextStripper();
-            int numPages = document.getNumberOfPages();
+            DynamicBoxExtractor extractor = new DynamicBoxExtractor();
+            extractor.getText(document);
 
-            for (int i = 1; i <= numPages; i++) {
-                pdfStripper.setStartPage(i);
-                pdfStripper.setEndPage(i);
-                String text = pdfStripper.getText(document);
+            System.out.println("\n======= Extracted Box Data =======");
 
-                System.out.println("\n======== Page " + i + " ========");
-                logExtractedData(text);
+            // Define labels to search dynamically
+            List<String> labels = List.of(
+                "LEVEL 1 REQUIREMENT", "LEVEL 2 REQUIREMENT", "LEVEL 3 REQUIREMENT",
+                "Currency", "Total Deficiency in USD", "Cash Call in USD"
+            );
+
+            for (String label : labels) {
+                String value = extractor.findTextNear(label);
+                System.out.println(label + ": " + value);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private void logExtractedData(String text) {
-        Map<String, String> extractedValues = new LinkedHashMap<>();
+    private String findTextNear(String label) {
+        if (!textPositions.containsKey(label)) {
+            return "Not Found";
+        }
 
-        // List of labels we want to extract
-        String[] labels = {
-            "Business Date", "Run Date", "Run Time", "Currency",
-            "Cash before Cover Calling", "Requirements",
-            "LEVEL 1 REQUIREMENT", "LEVEL 1 CASH",
-            "LEVEL 2 REQUIREMENT", "LEVEL 2 SURPLUS/DEFICIT",
-            "LEVEL 3 REQUIREMENT", "LEVEL 3 SURPLUS/DEFICIT",
-            "Total Deficiency in USD", "Cash Call in USD",
-            "Cash USD"
-        };
+        // Get the position of the label
+        List<TextPosition> positions = textPositions.get(label);
+        if (positions.isEmpty()) return "Not Found";
 
-        // Process each line in the extracted text
-        String[] lines = text.split("\n");
-        for (String line : lines) {
-            for (String label : labels) {
-                if (line.contains(label)) {
-                    // Extract value after label
-                    String value = line.replace(label, "").trim();
-                    extractedValues.put(label, value);
+        float labelY = positions.get(0).getYDirAdj();  // Y-coordinate of label
+        float labelX = positions.get(0).getXDirAdj();  // X-coordinate of label
+
+        // Find text closest to the label
+        String closestText = "Not Found";
+        float minDistance = Float.MAX_VALUE;
+
+        for (Map.Entry<String, List<TextPosition>> entry : textPositions.entrySet()) {
+            String text = entry.getKey();
+            List<TextPosition> posList = entry.getValue();
+
+            if (!text.equals(label) && !text.isEmpty()) {
+                float textY = posList.get(0).getYDirAdj();
+                float textX = posList.get(0).getXDirAdj();
+
+                // Check if text is directly beside or below the label
+                float distance = Math.abs(textY - labelY);
+                if (distance < minDistance && textX > labelX) {
+                    minDistance = distance;
+                    closestText = text;
                 }
             }
         }
+        return closestText;
+    }
 
-        // Log extracted values
-        extractedValues.forEach((key, value) -> 
-            System.out.println(key + ": " + value)
-        );
+    public static void main(String[] args) {
+        extractData("path/to/your.pdf");
     }
 }
